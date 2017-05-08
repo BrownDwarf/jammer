@@ -11,6 +11,8 @@ from Starfish.model import ThetaParam, PhiParam
 import argparse
 parser = argparse.ArgumentParser(prog="plot_many_mix_models_marley.py", description="Plot many mixture models.")
 parser.add_argument("--config", action='store_true', help="Use config file instead of emcee.")
+parser.add_argument("--static", action="store_true", help="Make a static figure of one draw")
+parser.add_argument("--animate", action="store_true", help="Make an animation of many draws from the two components.")
 args = parser.parse_args()
 
 import os
@@ -37,7 +39,7 @@ import yaml
 import shutil
 import json
 
-
+import matplotlib.pyplot as plt
 
 Starfish.routdir = ""
 
@@ -153,12 +155,11 @@ class Order:
 
         self.lnprob_last = self.lnprob
 
-        X = (self.chebyshevSpectrum.k * self.flux_std * np.eye(self.ndata)).dot(self.eigenspectra.T)
+        X = (self.flux_std * np.eye(self.ndata)).dot(self.eigenspectra.T)
 
         part1 = X.dot(self.C_GP.dot(X.T))
         part2 = self.data_mat
-        CC = part2 #+ part2
-        np.save('CC_new.npy', CC)
+        CC = part2 + part1
 
         try:
             factor, flag = cho_factor(CC)
@@ -168,7 +169,6 @@ class Order:
             np.save('X.npy', X)
             np.save('part1.npy', part1)
             np.save('part2.npy', part2)
-            np.save('cheb.npy', self.chebyshevSpectrum.k)
             np.save('flux_mean.npy', self.flux_mean)
             np.save('flux_std.npy', self.flux_std)
             np.save('C_GP.npy', self.C_GP)
@@ -176,7 +176,7 @@ class Order:
 
         try:
 
-            model1 = (self.chebyshevSpectrum.k * self.flux_mean + X.dot(self.mus))
+            model1 = (self.flux_mean + X.dot(self.mus))
             R = self.fl - model1
 
             logdet = np.sum(2 * np.log((np.diag(factor))))
@@ -190,7 +190,6 @@ class Order:
             print("Spectrum:", self.spectrum_id, "Order:", self.order)
             raise
 
-
     def draw_save(self):
         '''
         Return the lnprob using the current version of the C_GP matrix, data matrix,
@@ -199,12 +198,12 @@ class Order:
 
         self.lnprob_last = self.lnprob
 
-        X = (self.chebyshevSpectrum.k * self.flux_std * np.eye(self.ndata)).dot(self.eigenspectra.T)
-        model1 = (self.chebyshevSpectrum.k * self.flux_mean + X.dot(self.mus))
+        X = (self.flux_std * np.eye(self.ndata)).dot(self.eigenspectra.T)
 
         part1 = X.dot(self.C_GP.dot(X.T))
         part2 = self.data_mat
-        CC = part2 #+ part2
+        CC = part2 + part1
+        model1 = (self.flux_mean + X.dot(self.mus))
         np.save('CC_new.npy', CC)
 
         return model1
@@ -354,7 +353,10 @@ class SampleThetaPhi(Order):
         self.logger.debug("Updating nuisance parameters to {}".format(p))
 
         # Read off the Chebyshev parameters and update
-        self.chebyshevSpectrum.update(p.cheb)
+        ## May 1, 2017-- Turn off the Chebyshev spectrum for SpeX Prism mode.
+        ## See Issue #13 in jammer:
+        ## github.com/BrownDwarf/jammer/issues/13
+        #self.chebyshevSpectrum.update(p.cheb)
 
         # Check to make sure the global covariance parameters make sense
         #if p.sigAmp < 0.1:
@@ -370,18 +372,29 @@ class SampleThetaPhi(Order):
         self.data_mat = get_dense_C(self.wl, k_func=k_func, max_r=max_r) + p.sigAmp*self.sigma_mat
 
 
-# Run the program.
-
 model = SampleThetaPhi(debug=True)
 
 model.initialize((0,0))
+
+def lnlike(p):
+    try:
+        pars1 = ThetaParam(grid=p[0:2], vz=p[2], vsini=p[3], logOmega=p[4])
+        model.update_Theta(pars1)
+        # hard code npoly=3 (for fixc0 = True with chebyshev polynomials turned off)
+        pars2 = PhiParam(0, 0, True, [0.0, 0.0, 0.0], p[5], p[6], p[7])
+        model.update_Phi(pars2)
+        lnp = model.evaluate()
+        return lnp
+    except C.ModelError:
+        model.logger.debug("ModelError in stellar parameters, sending back -np.inf {}".format(p))
+        return -np.inf
 
 
 def lnprob_all(p):
     pars1 = ThetaParam(grid=p[0:2], vz=p[2], vsini=p[3], logOmega=p[4])
     model.update_Theta(pars1)
-    # hard code npoly=3 (for fixc0 = True with npoly=4)
-    pars2 = PhiParam(0, 0, True, p[5:8], p[8], p[9], p[10])
+    # hard code npoly=3 (for fixc0 = True with chebyshev polynomials turned off)
+    pars2 = PhiParam(0, 0, True, [0.0, 0.0, 0.0], p[5], p[6], p[7])
     model.update_Phi(pars2)
     draw = model.draw_save()
     return draw
@@ -391,6 +404,17 @@ data = model.fl
 import pandas as pd 
 import json
 
+draws = []
+
+ws = np.load("emcee_chain.npy")
+
+burned = ws[:, -200:,:]
+xs, ys, zs = burned.shape
+fc = burned.reshape(xs*ys, zs)
+
+nx, ny = fc.shape
+
+
 if args.config:
     df_out = pd.DataFrame({'wl':wl, 'data':data})
 
@@ -399,7 +423,6 @@ if args.config:
 
     psl = (Starfish.config['Theta']['grid']+
       [Starfish.config['Theta'][key] for key in ['vz', 'vsini', 'logOmega']] +
-      s0phi['cheb'] +
       [s0phi['sigAmp']] + [s0phi['logAmp']] + [s0phi['l']])
     
     ps = np.array(psl)
@@ -407,11 +430,11 @@ if args.config:
     
     df_out.to_csv('spec_config.csv', index=False) 
 
-else:
+if args.static:
 
     draws = []
 
-    ws = np.load("temp_emcee_chain.npy")
+    ws = np.load("emcee_chain.npy")
 
     burned = ws[:, 4997:5000,:]
     xs, ys, zs = burned.shape
@@ -434,3 +457,70 @@ else:
     df_out['model_comp50'] = lnprob_all(ps_med)
 
     df_out.to_csv('models_draw.csv', index=False)
+
+if args.animate:
+    from matplotlib import animation
+
+    n_draws = 200
+    rints = np.random.randint(0, nx, size=n_draws)
+    ps_es = fc[rints]
+    asi = ps_es[:, 4].argsort()
+    ps_vals = ps_es[asi , :]
+
+    draws = []
+
+    for i in range(n_draws):
+        ps = ps_vals[i]
+        draw = lnprob_all(ps)
+        draws.append(draw)
+
+    """
+    Matplotlib Animation Example
+
+    author: Jake Vanderplas
+    email: vanderplas@astro.washington.edu
+    website: http://jakevdp.github.com
+    license: BSD
+    Please feel free to use and modify this, but keep the above information. Thanks!
+    """
+
+    import seaborn as sns 
+    sns.set_context('talk', font_scale=1.5)
+    sns.set_style('ticks')
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    plt.step(wl, data, 'k', label='Data')
+    ax.set_xlim(np.min(wl), np.max(wl))
+    ax.set_xlabel(r"$\lambda (\AA)$")
+    ax.set_ylim(-1.0e-16, 8.0e-16)
+    #ax.set_yticks([])
+    #ax.set_xticks([])
+
+    # First set up the figure, the axis, and the plot element we want to animate
+    line, = ax.plot([], [], color='#AA00AA', lw=2, label='Model')
+
+    plt.legend(loc='upper right')
+
+    # initialization function: plot the background of each frame
+    def init():
+        line.set_data([], [])
+        return [line]
+
+    # animation function.  This is called sequentially
+    def animate(i):
+        line.set_data(wl, draws[i])
+        return [line]
+
+
+    # call the animator.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig, animate, init_func=init,
+                                   frames=200, interval=20, blit=True)
+
+    # save the animation as an mp4.  This requires ffmpeg or mencoder to be
+    # installed.  The extra_args ensure that the x264 codec is used, so that
+    # the video can be embedded in html5.  You may need to adjust this for
+    # your system: for more information, see
+    # http://matplotlib.sourceforge.net/api/animation_api.html
+    anim.save('BD_spec_anim.mp4', fps=10, dpi=300)
+
