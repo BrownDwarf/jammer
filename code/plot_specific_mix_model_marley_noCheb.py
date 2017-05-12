@@ -9,7 +9,7 @@ import Starfish
 from Starfish.model import ThetaParam, PhiParam
 
 import argparse
-parser = argparse.ArgumentParser(prog="plot_many_mix_models_marley.py", description="Plot many mixture models.")
+parser = argparse.ArgumentParser(prog="plot_many_mix_models_marley_noCheb.py", description="Plot many mixture models.")
 parser.add_argument("--config", action='store_true', help="Use config file instead of emcee.")
 parser.add_argument("--static", action="store_true", help="Make a static figure of one draw")
 parser.add_argument("--animate", action="store_true", help="Make an animation of many draws from the two components.")
@@ -493,7 +493,7 @@ if args.animate:
     plt.step(wl, data, 'k', label='Data')
     ax.set_xlim(np.min(wl), np.max(wl))
     ax.set_xlabel(r"$\lambda (\AA)$")
-    ax.set_ylim(-1.0e-16, 8.0e-16)
+    ax.set_ylim(0, 1.3*np.max(data))
     #ax.set_yticks([])
     #ax.set_xticks([])
 

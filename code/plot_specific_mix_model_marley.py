@@ -11,6 +11,8 @@ from Starfish.model import ThetaParam, PhiParam
 import argparse
 parser = argparse.ArgumentParser(prog="plot_many_mix_models_marley.py", description="Plot many mixture models.")
 parser.add_argument("--config", action='store_true', help="Use config file instead of emcee.")
+parser.add_argument("--static", action="store_true", help="Make a static figure of one draw")
+parser.add_argument("--animate", action="store_true", help="Make an animation of many draws from the two components.")
 args = parser.parse_args()
 
 import os
@@ -37,7 +39,7 @@ import yaml
 import shutil
 import json
 
-
+import matplotlib.pyplot as plt
 
 Starfish.routdir = ""
 
@@ -386,10 +388,22 @@ def lnprob_all(p):
     draw = model.draw_save()
     return draw
 
+
 wl = model.wl
 data = model.fl
 import pandas as pd 
 import json
+
+draws = []
+
+ws = np.load("emcee_chain.npy")
+
+burned = ws[:, -200:,:]
+xs, ys, zs = burned.shape
+fc = burned.reshape(xs*ys, zs)
+
+nx, ny = fc.shape
+
 
 if args.config:
     df_out = pd.DataFrame({'wl':wl, 'data':data})
@@ -407,11 +421,11 @@ if args.config:
     
     df_out.to_csv('spec_config.csv', index=False) 
 
-else:
+if args.static:
 
     draws = []
 
-    ws = np.load("temp_emcee_chain.npy")
+    ws = np.load("emcee_chain.npy")
 
     burned = ws[:, 4997:5000,:]
     xs, ys, zs = burned.shape
@@ -434,3 +448,70 @@ else:
     df_out['model_comp50'] = lnprob_all(ps_med)
 
     df_out.to_csv('models_draw.csv', index=False)
+
+if args.animate:
+    from matplotlib import animation
+
+    n_draws = 200
+    rints = np.random.randint(0, nx, size=n_draws)
+    ps_es = fc[rints]
+    asi = ps_es[:, 4].argsort()
+    ps_vals = ps_es[asi , :]
+
+    draws = []
+
+    for i in range(n_draws):
+        ps = ps_vals[i]
+        draw = lnprob_all(ps)
+        draws.append(draw)
+
+    """
+    Matplotlib Animation Example
+
+    author: Jake Vanderplas
+    email: vanderplas@astro.washington.edu
+    website: http://jakevdp.github.com
+    license: BSD
+    Please feel free to use and modify this, but keep the above information. Thanks!
+    """
+
+    import seaborn as sns 
+    sns.set_context('talk', font_scale=1.5)
+    sns.set_style('ticks')
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    plt.step(wl, data, 'k', label='Data')
+    ax.set_xlim(np.min(wl), np.max(wl))
+    ax.set_xlabel(r"$\lambda (\AA)$")
+    ax.set_ylim(0, 1.3*np.percentile(data, 95))
+    #ax.set_yticks([])
+    #ax.set_xticks([])
+
+    # First set up the figure, the axis, and the plot element we want to animate
+    line, = ax.plot([], [], color='#AA00AA', lw=2, label='Model')
+
+    plt.legend(loc='upper right')
+
+    # initialization function: plot the background of each frame
+    def init():
+        line.set_data([], [])
+        return [line]
+
+    # animation function.  This is called sequentially
+    def animate(i):
+        line.set_data(wl, draws[i])
+        return [line]
+
+
+    # call the animator.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig, animate, init_func=init,
+                                   frames=200, interval=20, blit=True)
+
+    # save the animation as an mp4.  This requires ffmpeg or mencoder to be
+    # installed.  The extra_args ensure that the x264 codec is used, so that
+    # the video can be embedded in html5.  You may need to adjust this for
+    # your system: for more information, see
+    # http://matplotlib.sourceforge.net/api/animation_api.html
+    anim.save('BD_IG_spec_anim.mp4', fps=10, dpi=300)
+
