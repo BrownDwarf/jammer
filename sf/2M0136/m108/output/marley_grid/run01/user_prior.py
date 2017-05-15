@@ -8,7 +8,8 @@ def user_defined_lnprior(p):
     	return -np.inf
 
     lnp_sigamp = -(p[8] - 1.0)**2/(2.0*0.05**2)
+    lnp_vsini = -(p[3] - 57.0)**2/(2.0*8.0**2)
 
-    ln_prior_out = lnp_sigamp
+    ln_prior_out = lnp_sigamp + lnp_vsini
 
     return ln_prior_out
