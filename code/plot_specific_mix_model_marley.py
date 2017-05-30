@@ -396,13 +396,18 @@ import json
 
 draws = []
 
-ws = np.load("emcee_chain.npy")
+try:    
+    ws = np.load("emcee_chain.npy")
 
-burned = ws[:, -200:,:]
-xs, ys, zs = burned.shape
-fc = burned.reshape(xs*ys, zs)
+    burned = ws[:, -200:,:]
+    xs, ys, zs = burned.shape
+    fc = burned.reshape(xs*ys, zs)
 
-nx, ny = fc.shape
+    nx, ny = fc.shape
+except FileNotFoundError:
+    print('Could not find emcee file-- running the config file instead')
+    args.config = True
+    pass
 
 
 if args.config:
