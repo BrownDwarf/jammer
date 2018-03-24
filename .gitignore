@@ -14,6 +14,16 @@ data/IGRINS/
 sf/2M0136/
 *.mp4
 
+*.out
+
+## Temporarily ignore some directories
+computing
+
+
+
+
+## Boiler plate for Python
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
