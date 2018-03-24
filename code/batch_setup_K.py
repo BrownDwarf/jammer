@@ -1,27 +1,27 @@
 #!/usr/bin/env python
 import os
-import yaml
-import numpy as np 
-import h5py
+chs = range(5, 32)
 
-chs = range(15, 32)
+os.chdir(os.path.expandvars('$jammer/sf/2M0314'))
 
-os.chdir(os.path.expandvars('$jammer/sf/2M0136'))
+if False:
+    for ch in chs:
+        os.chdir("K_ch{:03d}".format(ch))
+        os.system('mkdir libraries &')
+        os.system('$Starfish/scripts/grid.py --create > grid.out &')
+        os.chdir("..")
+print('Done with part I')
 
-#for ch in chs:
-#    os.chdir("K_ch{:03d}".format(ch))
-#    os.system('mkdir libraries &')
-#    os.system('grid.py --create > grid.out &')
-#    os.chdir("..")
+if True:
+    for ch in chs:
+        os.chdir("K_ch{:03d}".format(ch))
+        os.system('$Starfish/scripts/pca.py --create > pca_create.out')
+        os.system('$Starfish/scripts/pca.py --optimize=emcee --samples=3  > pca_optimize.out')
+        os.system('$Starfish/scripts/pca.py --store --params=emcee > pca_store.out')
+        os.system('mkdir output')
+        os.system('mkdir output/marley_grid')
+        os.system('mkdir output/marley_grid/run01')
+        os.system('cp $jammer/sf/2M0314/K_ch003/output/marley_grid/run01/s0_o0phi.json output/marley_grid/run01/')
+        os.chdir("..")
 
-for ch in chs:
-    os.chdir("K_ch{:03d}".format(ch))
-    os.system('pca.py --create > pca_create.out')
-    os.system('time pca.py --optimize=emcee --samples=100  > pca_optimize.out')
-    os.system('time pca.py --store --params=emcee > pca_store.out')
-    os.system('mkdir output')
-    os.system('mkdir output/marley_grid')
-    os.system('mkdir output/marley_grid/run01')
-    os.system('cp /Users/gully/GitHub/jammer/sf/2M0136/m110/output/marley_grid/run01/s0_o0phi.json output/marley_grid/run01/')
-    os.system('cp /Users/gully/GitHub/jammer/sf/2M0136/m110/output/marley_grid/run01/user_prior.py output/marley_grid/run01/')
-    os.chdir("..")
+print('Done with part II')
