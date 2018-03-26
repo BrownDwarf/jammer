@@ -135,7 +135,7 @@ class Order:
 
         part1 = self.Omega**2 * self.flux_scalar**2 * X.dot(self.C_GP.dot(X.T))
         part2 = self.data_mat
-        
+
         #CC = X.dot(self.C_GP.dot(X.T)) + self.data_mat
         CC = part1 + part2
 
@@ -291,7 +291,7 @@ class SampleThetaPhi(Order):
 
             # sigAmp must be positive (this is effectively a prior)
             # See https://github.com/iancze/Starfish/issues/26
-            if not (0.0 < sigAmp): 
+            if not (0.0 < sigAmp):
                 self.lnprob_last = self.lnprob
                 lnp = -np.inf
                 self.logger.debug("sigAmp was negative, returning -np.inf")

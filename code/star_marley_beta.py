@@ -40,7 +40,7 @@ import shutil
 import json
 
 from star_base import Order as OrderBase
-from star_base import SampleThetaPhi as SampleThetaPhiBase 
+from star_base import SampleThetaPhi as SampleThetaPhiBase
 
 Starfish.routdir = ""
 
@@ -55,7 +55,7 @@ Instruments = [eval("Starfish.grid_tools." + inst)() for inst in Starfish.data["
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s -  %(message)s", filename="{}log.log".format(
-    Starfish.routdir), level=logging.DEBUG, filemode="w", datefmt='%m/%d/%Y %I:%M:%S %p')
+    Starfish.routdir), level=logging.INFO, filemode="w", datefmt='%m/%d/%Y %I:%M:%S %p')
 
 class Order(OrderBase):
     pass #put custom behavior here
@@ -84,6 +84,24 @@ def lnlike(p):
         model.logger.debug("ModelError in stellar parameters, sending back -np.inf {}".format(p))
         return -np.inf
 
+def book_keeping():
+    '''Write a json blob of Starfish run metadata for use later'''
+    timestamp = time.strftime('%Y%m%d%H%M')
+    dict_out = {'computer_name':os.uname()[1],
+    'starfish_version': __file__,
+    'path_name':os.getcwd(),
+    'start_time':t_start,
+    'end_time':t_end,
+    'elapsed_time_s': np.round(elapsed_time,1),
+    'elapsed_time_hr':np.round(elapsed_time/3600.0,2),
+    'timestamp':timestamp,
+    'N_samples_request':nsteps,
+    'N_dim':ndim,
+    'N_threads':n_threads}
+    fn_out = 'sf_log_'+timestamp+'.json'
+    with open(fn_out, 'w') as ff:
+        json.dump(dict_out, ff, indent=1)
+    return 1
 
 # Must load a user-defined prior
 try:
@@ -114,7 +132,7 @@ phi0 = PhiParam.load(fname)
 
 ndim, nwalkers = 11, 40
 
-p0 = np.array(start["grid"] + [start["vz"], start["vsini"], start["logOmega"]] + 
+p0 = np.array(start["grid"] + [start["vz"], start["vsini"], start["logOmega"]] +
              phi0.cheb.tolist() + [phi0.sigAmp, phi0.logAmp, phi0.l])
 
 p0_std = [5, 0.02, 0.5, 0.5, 0.01, 0.005, 0.005, 0.005, 0.01, 0.001, 0.5]
@@ -127,16 +145,21 @@ else:
 n_threads = multiprocessing.cpu_count()
 sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, threads=n_threads)
 
-
+t_start=time.strftime('%Y %b %d,%l:%M %p')
+t0 = time.time()
 nsteps = args.samples
 ninc = args.incremental_save
 for i, (pos, lnp, state) in enumerate(sampler.sample(p0_ball, iterations=nsteps)):
     if (i+1) % ninc == 0:
-        time.ctime() 
-        t_out = time.strftime('%Y %b %d,%l:%M %p') 
+        time.ctime()
+        t_out = time.strftime('%Y %b %d,%l:%M %p')
         print("{0}: {1:}/{2:} = {3:.1f}%".format(t_out, i, nsteps, 100 * float(i) / nsteps))
         np.save('temp_emcee_chain.npy',sampler.chain)
 
 np.save('emcee_chain.npy',sampler.chain)
+t_end=time.strftime('%Y %b %d,%l:%M %p')
+t1 = time.time()
+elapsed_time = t1-t0
+ret_val = book_keeping()
 
 print("The end.")
