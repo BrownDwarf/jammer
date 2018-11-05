@@ -11,7 +11,7 @@ Theta:
   Av: 0.0
   grid: [2150.0, 4.5]
   logOmega: 0.81
-  vsini: 30.0
+  vsini: 20.0
   vz: 0.0
 Theta_jump:
   Av: 0.01
@@ -19,7 +19,7 @@ Theta_jump:
   logOmega: 0.003
   vsini: 0.05
   vz: 0.05
-Theta_priors: $jammer/sf/2M0314/K_ch009/user_prior.py
+Theta_priors: $jammer/sf/2M0314/user_prior.py
 cheb_degree: 4
 cheb_jump: 0.0001
 data:
